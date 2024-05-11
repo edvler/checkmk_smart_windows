@@ -38,17 +38,22 @@ $scan_result = Invoke-Expression "& 'C:\Program Files\smartmontools\bin\smartctl
 ## 
 ## Loop over available devices
 ## 
-
 foreach ($device in $scan_result.devices.name) {
+  ## Scan Devices -> smart_result - one device per line
+  $smart_result = Invoke-Expression "& 'C:\Program Files\smartmontools\bin\smartctl.exe' -a $device --json=c" | ConvertFrom-Json
+  ## Remove Blanks from Devicename
+  $namestrip=$smart_result.model_name.replace(' ','')
 
-## Scan Devices -> smart_result - one device per line
-    $smart_result = Invoke-Expression "& 'C:\Program Files\smartmontools\bin\smartctl.exe' -d ata -a $device --json=c" | ConvertFrom-Json
-## Remove Blanks from Devicename
-	$namestrip=$smart_result.model_name.replace(' ','')
+  ## If device-type is nvme
+  $dt = $smart_result.device.type.ToLower()
+  if ($dt -eq "nvme") {
+    echo("$device NVME $namestrip")
+    $rn = Invoke-Expression "& 'C:\Program Files\smartmontools\bin\smartctl.exe' -d nvme -A $device" | Select-Object -Skip 5 
+    echo $rn
+  }
 
-  ## Loop - Results per device
-  foreach ($id in $smart_result.ata_smart_attributes.table.id)
-	{
+  ## Loop - Results per device - only available if ata protocol is used
+  foreach ($id in $smart_result.ata_smart_attributes.table.id) {
 	# query values from JSON output
 	# Attribute name e.g. "Raw_Read_Error_Rate"
         $smartname =  $smart_result.ata_smart_attributes.table | where id -eq $id | select-object name
@@ -96,10 +101,9 @@ foreach ($device in $scan_result.devices.name) {
 		" - " + " " +
 		$smartraw.raw.string 
 		
-echo $output	
-	}
-## End of device loop
-}
+        echo $output	
+	} ## End of attribute loop
+} ## End of device loop
 #########################################################################################
 # end of script
 #########################################################################################
